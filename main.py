@@ -5,6 +5,7 @@ import csv
 import yaml
 from tqdm import tqdm
 from urllib.parse import urlparse
+import ipaddress  # Importing ipaddress module to validate IP addresses
 
 
 def main():
@@ -122,22 +123,39 @@ def process_attributes(attributes, filename, all_rows):
         description = attr.get('comment', '')
 
         if attr_type == 'ip-dst|port':
-            # Extract IP address and assign 'ipv4' as type
+            # Extract IP address and determine if it's IPv4 or IPv6
             ip_value = value.split('|')[0]
-            attr_type_processed = 'ipv4'
-            value_processed = ip_value
+            ip_type = determine_ip_type(ip_value)
+            if ip_type:
+                attr_type_processed = ip_type
+                value_processed = ip_value
+            else:
+                continue  # Skip if IP address is invalid
         elif attr_type == 'url':
-            # Extract domain from URL and assign 'domain' as type
+            # Extract domain from URL and check if it's an IP address
             parsed_url = urlparse(value)
-            domain = parsed_url.hostname
-            if domain:
-                attr_type_processed = 'domain'
-                value_processed = domain
+            domain_or_ip = parsed_url.hostname
+            if domain_or_ip:
+                ip_type = determine_ip_type(domain_or_ip)
+                if ip_type:
+                    attr_type_processed = ip_type
+                    value_processed = domain_or_ip
+                else:
+                    attr_type_processed = 'domain'
+                    value_processed = domain_or_ip
             else:
                 continue  # Skip if domain extraction fails
         elif attr_type in ['sha256', 'md5', 'domain', 'ipv4', 'ipv6']:
-            attr_type_processed = attr_type
             value_processed = value
+            if attr_type == 'domain':
+                # Check if the domain is actually an IP address
+                ip_type = determine_ip_type(value_processed)
+                if ip_type:
+                    attr_type_processed = ip_type
+                else:
+                    attr_type_processed = 'domain'
+            else:
+                attr_type_processed = attr_type
         else:
             continue  # Skip other types
 
@@ -158,6 +176,17 @@ def process_attributes(attributes, filename, all_rows):
             'metadata.filename': filename or ''
         }
         all_rows.append(row)
+
+
+def determine_ip_type(value):
+    try:
+        ip_obj = ipaddress.ip_address(value)
+        if isinstance(ip_obj, ipaddress.IPv4Address):
+            return 'ipv4'
+        elif isinstance(ip_obj, ipaddress.IPv6Address):
+            return 'ipv6'
+    except ValueError:
+        return None  # Not an IP address
 
 
 def is_valid_hash(hash_value, hash_type):
