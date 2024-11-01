@@ -70,6 +70,14 @@ Type **yes** if you're feeling adventurous, or **no** if patience isn't your vir
 * **Duplicate Removal**: It removes duplicates because nobody likes reruns—unless it's that one episode of your favorite show.
 * **CSV Generation**: Finally, it spits out an output.csv file with all the malware data neatly organized, so you can feel like a cybersecurity superhero.
 
+Once you have your `output.csv` all you have to do is:
+1. Login into your Falcon instance
+2. Endpoint Security
+3. IOC Management
+4. Import with Metadata
+
+and voilà !
+
 ## Roadmap
 Just like my uncle always says, "If you ain't moving forward, you're standing still." Here's what's on the horizon for this script:
 
