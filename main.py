@@ -86,6 +86,12 @@ def process_event(event_json, all_rows):
             if attr_type in ['sha256', 'md5', 'domain', 'ipv4', 'ipv6']:
                 value = attr.get('value')
                 description = attr.get('comment', '')
+
+                # If attr_type is sha256 or md5, check that the value is valid
+                if attr_type in ['sha256', 'md5']:
+                    if not is_valid_hash(value, attr_type):
+                        continue  # Skip invalid hashes
+
                 # Build row
                 row = {
                     'Type': attr_type,
@@ -98,6 +104,16 @@ def process_event(event_json, all_rows):
                     'metadata.filename': filename or ''
                 }
                 all_rows.append(row)
+
+def is_valid_hash(hash_value, hash_type):
+    if hash_type == 'md5':
+        # MD5 hashes are 32 hexadecimal characters
+        return len(hash_value) == 32 and all(c in '0123456789abcdefABCDEF' for c in hash_value)
+    elif hash_type == 'sha256':
+        # SHA256 hashes are 64 hexadecimal characters
+        return len(hash_value) == 64 and all(c in '0123456789abcdefABCDEF' for c in hash_value)
+    else:
+        return False
 
 def get_row_key(row):
     # Create a key based on significant fields to identify duplicates
