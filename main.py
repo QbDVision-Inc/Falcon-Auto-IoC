@@ -9,18 +9,26 @@ import ipaddress
 
 
 def main():
-    # Load sources and Falcon API token from YAML file
+    # Load sources and Falcon API credentials from YAML file
     with open('sources.yaml', 'r') as yaml_file:
         config = yaml.safe_load(yaml_file)
         source_urls = config.get('sources', [])
-        falcon_api_token = config.get('falcon_api_token')
+        client_id = config.get('client_id')
+        client_secret = config.get('client_secret')
+        falcon_base_url = config.get('falcon_base_url')
 
     if not source_urls:
         print("No sources found in sources.yaml")
         return
 
-    if not falcon_api_token:
-        print("Falcon API token not found in sources.yaml")
+    if not client_id or not client_secret or not falcon_base_url:
+        print("Falcon API client_id, client_secret, or falcon_base_url not found in sources.yaml")
+        return
+
+    # Obtain the access token
+    access_token = get_falcon_access_token(client_id, client_secret, falcon_base_url)
+    if not access_token:
+        print("Failed to obtain Falcon API access token.")
         return
 
     # Ask the user for the date range
@@ -92,9 +100,31 @@ def main():
     # Ask the user if they want to send the data to Falcon API
     choice = input("Do you want to send each record via POST request to Falcon API? (yes/no): ").strip().lower()
     if choice in ['yes', 'y']:
-        send_data_to_falcon_api(unique_rows, falcon_api_token)
+        send_data_to_falcon_api(unique_rows, access_token, falcon_base_url)
     else:
         print("Data not sent to Falcon API.")
+
+
+def get_falcon_access_token(client_id, client_secret, falcon_base_url):
+    url = f"{falcon_base_url}/oauth2/token"
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    data = {
+        'client_id': client_id,
+        'client_secret': client_secret
+    }
+
+    try:
+        response = requests.post(url, headers=headers, data=data)
+        response.raise_for_status()
+        token_response = response.json()
+        access_token = token_response.get('access_token')
+        return access_token
+    except requests.exceptions.RequestException as e:
+        print(f"Error obtaining access token: {e}")
+        return None
 
 
 def process_event(event_json, all_rows):
@@ -219,11 +249,11 @@ def get_row_key(row):
     return (row['Type'], row['value'], row['description'], row['metadata.filename'])
 
 
-def send_data_to_falcon_api(records, api_token):
-    url = 'https://api.crowdstrike.com/iocs/entities/indicators/v1'
+def send_data_to_falcon_api(records, access_token, falcon_base_url):
+    url = f'{falcon_base_url}/iocs/entities/indicators/v1'
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {api_token}'
+        'Authorization': f'Bearer {access_token}'
     }
 
     # Prepare the data to be sent
@@ -245,7 +275,7 @@ def send_data_to_falcon_api(records, api_token):
 
         try:
             response = requests.post(url, headers=headers, json=data)
-            if response.status_code == 201 or response.status_code == 200:
+            if response.status_code in [200, 201]:
                 pass  # Successfully created
             else:
                 print(f"Failed to send indicator {record['value']}: {response.status_code} - {response.text}")
