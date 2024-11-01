@@ -1,4 +1,5 @@
 sources:
   - https://bazaar.abuse.ch/downloads/misp/manifest.json
   - https://threatfox.abuse.ch/downloads/misp/manifest.json
-falcon_api_token: YOUR_FALCON_API_TOKEN_HERE
+client_id: YOUR_CLIENT_ID_HERE
+client_secret: YOUR_CLIENT_SECRET_HERE
