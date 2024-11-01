@@ -5,17 +5,22 @@ import csv
 import yaml
 from tqdm import tqdm
 from urllib.parse import urlparse
-import ipaddress  # Importing ipaddress module to validate IP addresses
+import ipaddress
 
 
 def main():
-    # Load sources from YAML file
+    # Load sources and Falcon API token from YAML file
     with open('sources.yaml', 'r') as yaml_file:
         config = yaml.safe_load(yaml_file)
         source_urls = config.get('sources', [])
+        falcon_api_token = config.get('falcon_api_token')
 
     if not source_urls:
         print("No sources found in sources.yaml")
+        return
+
+    if not falcon_api_token:
+        print("Falcon API token not found in sources.yaml")
         return
 
     # Ask the user for the date range
@@ -81,6 +86,15 @@ def main():
         writer.writeheader()
         for row in unique_rows:
             writer.writerow(row)
+
+    print(f"CSV file '{csv_filename}' has been generated with {len(unique_rows)} records.")
+
+    # Ask the user if they want to send the data to Falcon API
+    choice = input("Do you want to send each record via POST request to Falcon API? (yes/no): ").strip().lower()
+    if choice in ['yes', 'y']:
+        send_data_to_falcon_api(unique_rows, falcon_api_token)
+    else:
+        print("Data not sent to Falcon API.")
 
 
 def process_event(event_json, all_rows):
@@ -203,6 +217,40 @@ def is_valid_hash(hash_value, hash_type):
 def get_row_key(row):
     # Create a key based on significant fields to identify duplicates
     return (row['Type'], row['value'], row['description'], row['metadata.filename'])
+
+
+def send_data_to_falcon_api(records, api_token):
+    url = 'https://api.crowdstrike.com/iocs/entities/indicators/v1'
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {api_token}'
+    }
+
+    # Prepare the data to be sent
+    for record in tqdm(records, desc="Sending data to Falcon API", unit="record"):
+        indicator = {
+            'type': record['Type'],
+            'value': record['value'],
+            'action': record['action'],
+            'severity': record['severity'],
+            'description': record['description'],
+            'platforms': record['platforms'].split(','),
+            'applied_globally': record['applied_globally'].lower() == 'true'
+        }
+
+        data = {
+            'comment': 'Using abuse.ch',
+            'indicators': [indicator]
+        }
+
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            if response.status_code == 201 or response.status_code == 200:
+                pass  # Successfully created
+            else:
+                print(f"Failed to send indicator {record['value']}: {response.status_code} - {response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error sending indicator {record['value']}: {e}")
 
 
 if __name__ == '__main__':
